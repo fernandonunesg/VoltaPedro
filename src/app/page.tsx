@@ -76,6 +76,7 @@ export default function HomePage() {
         body: JSON.stringify({ name, organizerName, eventDate, startTime, location, description }),
       });
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Erro ao criar evento");
       setCreatedSlug(data.event.slug);
       if (data.organizerToken) {
         localStorage.setItem(`pedro_organizer_${data.event.slug}`, data.organizerToken);
