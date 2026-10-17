@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
+import { db, ensureSchema } from "@/db";
 import { events, votes } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { SLOTS } from "@/lib/slots";
@@ -8,6 +8,7 @@ import { cleanText } from "@/lib/sanitize";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   try {
+    await ensureSchema();
     const { slug } = await ctx.params;
     const body = await req.json();
     const voterName = cleanText(body.voterName, 40);

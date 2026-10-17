@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
+import { db, ensureSchema } from "@/db";
 import { events, votes } from "@/db/schema";
 import { eq, asc, sql } from "drizzle-orm";
 import { SLOTS } from "@/lib/slots";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   try {
+    await ensureSchema();
     const { slug } = await ctx.params;
     const [ev] = await db.select().from(events).where(eq(events.slug, slug)).limit(1);
     if (!ev) return NextResponse.json({ error: "Evento não encontrado" }, { status: 404 });
@@ -62,6 +63,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
 // PATCH: reveal actual arrival / reopen (apenas com autorização do organizador)
 export async function PATCH(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   try {
+    await ensureSchema();
     const { slug } = await ctx.params;
     const body = await req.json();
     const [ev] = await db.select().from(events).where(eq(events.slug, slug)).limit(1);

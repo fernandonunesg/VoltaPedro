@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
+import { db, ensureSchema } from "@/db";
 import { events, votes } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import crypto from "crypto";
@@ -10,6 +10,7 @@ function makeSlug() {
 
 export async function GET() {
   try {
+    await ensureSchema();
     const rows = await db
       .select({
         id: events.id,
@@ -55,6 +56,7 @@ import { cleanText, isValidDate, isValidTime } from "@/lib/sanitize";
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureSchema();
     const body = await req.json();
     const name = cleanText(body.name, 80);
     const description = cleanText(body.description, 300);
