@@ -217,7 +217,7 @@ export default function HomePage() {
             <h2 className="font-display mt-1 text-3xl font-black tracking-tight sm:text-4xl">Crie o evento em 30 segundos</h2>
             <p className="mt-1 max-w-2xl text-sm text-stone-600 sm:text-base">Defina o horário oficial. A gente gera automaticamente as apostas de 30 em 30 min pelas próximas 4 horas. Você só compartilha o link e assiste o caos.</p>
           </div>
-          <span className="rounded-full border-2 border-stone-900 bg-white px-3 py-1.5 text-xs font-black hard-shadow-sm">JANELA DE APOSTAS: 4 HORAS • 9 HORÁRIOS + “NÃO VEM”</span>
+          <span className="rounded-2xl border-2 border-stone-900 bg-white px-3 py-1.5 text-xs font-black leading-snug hard-shadow-sm sm:rounded-full">JANELA DE APOSTAS: 4 HORAS • 9 HORÁRIOS + “NÃO VEM”</span>
         </div>
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
