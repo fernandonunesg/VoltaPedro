@@ -15,7 +15,7 @@ type EventItem = {
   actualSlotIndex: number | null; createdAt: string; voteCount: number;
 };
 
-const HERO_IMG = "/principal.jpg";
+const HERO_IMG = "/principal.jpg?v=2";
 
 function todayStr() {
   const d = new Date();
