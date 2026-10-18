@@ -63,6 +63,8 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
         ? { id: mine.id, voterName: mine.voterName, slotIndex: mine.slotIndex, slotMinutes: mine.slotMinutes }
         : null,
       winners: winners.map((w) => ({ id: w.id, voterName: w.voterName, slotIndex: w.slotIndex })),
+      // Nomes de quem já apostou: público (sem horários).
+      publicVoters: allVotes.map((v) => ({ id: v.id, voterName: v.voterName })),
       // Lista individual + distribuição por horário: só para o organizador.
       votes: isOrganizer
         ? allVotes.map((v) => ({

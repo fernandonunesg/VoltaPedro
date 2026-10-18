@@ -12,6 +12,7 @@ import { STEP_MINUTES, NO_SHOW_MINUTES, addMinutesToTime, slotByIndex, personaFo
 
 type Vote = { id: string; voterName: string; voterToken: string; slotIndex: number; slotMinutes: number; createdAt: string; updatedAt: string };
 type Dist = { minutes: number; count: number; pct: number };
+type PublicVoter = { id: string; voterName: string };
 type EventData = {
   id: string; slug: string; name: string; description: string; eventDate: string;
   startTime: string; location: string; organizerName: string; status: string;
@@ -100,6 +101,7 @@ export default function EventPage() {
   const slug = params.slug;
   const [event, setEvent] = useState<EventData | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
+  const [publicVoters, setPublicVoters] = useState<PublicVoter[]>([]);
   const [distribution, setDistribution] = useState<Dist[]>([]);
   const [totalVotes, setTotalVotes] = useState(0);
   const [avgDelay, setAvgDelay] = useState(0);
@@ -159,7 +161,7 @@ export default function EventPage() {
         setLiveFlash(true); setTimeout(() => setLiveFlash(false), 1200);
       }
       prevTotal.current = data.totalVotes;
-      setEvent(data.event); setVotes(data.votes); setDistribution(data.distribution);
+      setEvent(data.event); setVotes(data.votes); setDistribution(data.distribution); setPublicVoters(data.publicVoters || []);
       setTotalVotes(data.totalVotes); setAvgDelay(data.avgPredictedDelay);
       setNoShowCount(data.noShowCount); setWinners(data.winners || []);
       setIsOrganizer(Boolean(data.isOrganizer));
@@ -552,7 +554,7 @@ export default function EventPage() {
             ) : (
             <section className="rounded-3xl border-2 border-stone-900 bg-stone-900 p-5 text-white hard-shadow">
               <h3 className="font-display flex items-center gap-2 text-lg font-black"><Flame className="h-5 w-5 text-amber-400" /> Termômetro da votação</h3>
-              <p className="mt-1 text-xs text-stone-400">Quem apostou o quê fica só com o organizador. Aqui vocês veem só o clima geral.</p>
+              <p className="mt-1 text-xs text-stone-400">O clima geral da votação — e, aqui embaixo, quem já apostou. Os horários de cada aposta ficam só com o organizador.</p>
               <div className="mt-4 grid grid-cols-2 gap-2">
                 <div className="rounded-2xl border border-stone-700 bg-stone-800 p-3">
                   <p className="font-display text-2xl font-black">{totalVotes}</p>
@@ -574,6 +576,28 @@ export default function EventPage() {
                   ? `${noShowCount} de ${totalVotes} já desistiram — ${Math.round((noShowCount / totalVotes) * 100)}% apostaram no "não vem".`
                   : "Ninguém apostou no \"não vem\" ainda. Otimismo (ou ingenuidade) coletiva(o)."}
               </p>
+              <div className="mt-4 border-t border-stone-700 pt-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-[11px] font-black tracking-wide text-amber-300">QUEM JÁ APOSTOU</p>
+                  <span className="rounded-full bg-stone-800 px-2 py-0.5 text-[11px] font-black text-stone-300">{publicVoters.length}</span>
+                </div>
+                {publicVoters.length === 0 ? (
+                  <p className="mt-2 text-xs text-stone-500">Ninguém apostou ainda. Seja o primeiro — aposta aí em cima.</p>
+                ) : (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {publicVoters.map((v) => {
+                      const mine = myVote?.id === v.id;
+                      return (
+                        <span key={v.id} className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-black ${mine ? "border-emerald-400 bg-emerald-500/15 text-emerald-300" : "border-stone-700 bg-stone-800 text-stone-100"}`}>
+                          <span className="truncate">{v.voterName}</span>
+                          {mine && <span className="text-[9px] font-bold text-emerald-400">VOCÊ</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                <p className="mt-2 text-[10px] font-semibold text-stone-500">O horário que cada um apostou fica só com o organizador.</p>
+              </div>
             </section>
             )}
 
