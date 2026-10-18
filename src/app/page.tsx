@@ -7,7 +7,7 @@ import {
   Timer, AlarmClock, ArrowRight, Plus, Zap, MessageCircle, RefreshCw,
   Hourglass, Crown, Ghost, PartyPopper, Link2, ChevronRight, Eye
 } from "lucide-react";
-import { SLOTS, addMinutesToTime, EXCUSE_GENERATOR, FUNNY_QUOTES } from "@/lib/slots";
+import { addMinutesToTime, EXCUSE_GENERATOR, FUNNY_QUOTES, personaForMinutes, minutesToLabel, NO_SHOW_MINUTES } from "@/lib/slots";
 
 type EventItem = {
   id: string; slug: string; name: string; description: string; eventDate: string;
@@ -59,10 +59,11 @@ export default function HomePage() {
 
   const previewSlots = useMemo(() => {
     if (!/^\d{2}:\d{2}$/.test(startTime)) return [];
-    return SLOTS.map((s) => ({
-      ...s,
-      time: s.slotMinutes === 999 ? "—" : addMinutesToTime(startTime, s.slotMinutes),
-    }));
+    const moments = [0, 60, 120, 180, 240, 300, 360, 420, 480];
+    return [
+      ...moments.map((m) => ({ minutes: m, time: addMinutesToTime(startTime, m), persona: personaForMinutes(m) })),
+      { minutes: NO_SHOW_MINUTES, time: "—", persona: personaForMinutes(NO_SHOW_MINUTES) },
+    ];
   }, [startTime]);
 
   const fullLink = createdSlug ? `${typeof window !== "undefined" ? window.location.origin : ""}/evento/${createdSlug}` : "";
@@ -243,7 +244,7 @@ export default function HomePage() {
               <div>
                 <label className="flex items-center gap-1 text-xs font-black tracking-wide"><Clock className="h-3.5 w-3.5" /> HORÁRIO OFICIAL *</label>
                 <input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="mt-1.5 w-full rounded-xl border-2 border-stone-900 bg-amber-50 px-3.5 py-3 text-sm font-semibold outline-none focus:bg-white" required />
-                <p className="mt-1 text-[11px] font-medium text-stone-500">As apostas vão de {startTime || "--:--"} até {startTime ? addMinutesToTime(startTime, 240) : "--:--"}.</p>
+                <p className="mt-1 text-[11px] font-medium text-stone-500">As apostas vão de {startTime || "--:--"} até {startTime ? addMinutesToTime(startTime, 480) : "--:--"} (8h depois), em passos de 5 min.</p>
               </div>
               <div className="sm:col-span-2">
                 <label className="text-xs font-black tracking-wide">DESCRIÇÃO (OPCIONAL, ZOEIRA LIBERADA)</label>
@@ -283,19 +284,19 @@ export default function HomePage() {
               <h3 className="font-display text-lg font-black">Prévia das apostas</h3>
               <span className="rounded-full bg-amber-400 px-2.5 py-1 text-[11px] font-black text-stone-900">INÍCIO {startTime || "--:--"}</span>
             </div>
-            <p className="mt-1 text-xs text-stone-400">Gerado automaticamente • a cada 30 min • por 4 horas</p>
+            <p className="mt-1 text-xs text-stone-400">Você escolhe hora e minuto • de {startTime || "--:--"} até 8h depois • passos de 5 min</p>
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
               {previewSlots.map((s) => (
-                <div key={s.slotIndex} className={`rounded-2xl border-2 p-3 ${s.slotMinutes === 999 ? "border-red-400 bg-red-950" : s.slotMinutes === 0 ? "border-emerald-400 bg-emerald-950" : "border-stone-700 bg-stone-800"}`}>
-                  <p className="font-display text-lg font-black leading-none">{s.slotMinutes === 999 ? <Ghost className="h-5 w-5" /> : s.time}</p>
-                  <p className="mt-1 text-[11px] font-black tracking-wide text-amber-300">{s.label} • {s.badge}</p>
-                  <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-stone-300">{s.title}</p>
+                <div key={s.minutes} className={`rounded-2xl border-2 p-3 ${s.minutes >= NO_SHOW_MINUTES ? "border-red-400 bg-red-950" : s.minutes === 0 ? "border-emerald-400 bg-emerald-950" : "border-stone-700 bg-stone-800"}`}>
+                  <p className="font-display text-lg font-black leading-none">{s.minutes >= NO_SHOW_MINUTES ? <Ghost className="h-5 w-5" /> : s.time}</p>
+                  <p className="mt-1 text-[11px] font-black tracking-wide text-amber-300">{minutesToLabel(s.minutes)} • {s.persona.badge}</p>
+                  <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-stone-300">{s.persona.title}</p>
                 </div>
               ))}
             </div>
             <div className="mt-4 rounded-2xl border border-stone-700 bg-stone-800 p-3.5">
               <p className="text-[11px] font-black tracking-wide text-amber-300">EXEMPLO DA REGRA</p>
-              <p className="mt-1 text-xs leading-relaxed text-stone-300">Começa às 22:00 → apostas: 22:00, 22:30, 23:00, 23:30, 00:00, 00:30, 01:00, 01:30 e 02:00. Simples, cruel e estatisticamente preciso.</p>
+              <p className="mt-1 text-xs leading-relaxed text-stone-300">Começa às 22:00? Vale qualquer palpite de 22:00 até 06:00 do dia seguinte — inclusive 22:47. Ganha quem chegar mais perto. Simples, cruel e estatisticamente justo.</p>
             </div>
             {/* excuse generator */}
             <div className="mt-3 rounded-2xl bg-amber-400 p-3.5 text-stone-900">
@@ -315,9 +316,9 @@ export default function HomePage() {
           <h2 className="font-display text-center text-3xl font-black tracking-tight">Como funciona (mais pontual que o Pedro)</h2>
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {[
-              { n: "1", icon: Calendar, title: "Organizador cria", desc: "Nome, data e horário oficial do evento. O sistema gera as 10 opções de aposta na hora." },
-              { n: "2", icon: Link2, title: "Galera aposta pelo link", desc: "Cada pessoa escolhe um horário com o nome dela. Pode mudar de ideia até a votação fechar. Um voto por pessoa, sem bagunça." },
-              { n: "3", icon: Trophy, title: "Pedro (talvez) chega", desc: "Quando ele aparecer — ou não — o organizador revela o horário real e o app coroa quem acertou. Glória eterna no grupo." },
+              { n: "1", icon: Calendar, title: "Organizador cria", desc: "Nome, data e horário oficial do evento. A janela de aposta vai do horário marcado até 8h depois." },
+              { n: "2", icon: Link2, title: "Galera aposta pelo link", desc: "Cada pessoa escolhe a hora e o minuto com o nome dela. Pode mudar de ideia até a votação fechar. Um voto por pessoa, sem bagunça." },
+              { n: "3", icon: Trophy, title: "Pedro (talvez) chega", desc: "Quando ele aparecer — ou não — o organizador revela o horário real e o app coroa quem chegou mais perto. Glória eterna no grupo." },
             ].map((s) => (
               <div key={s.n} className="relative rounded-3xl border-2 border-stone-900 bg-amber-50 p-5 hard-shadow-sm">
                 <span className="font-display absolute -top-4 right-4 grid h-9 w-9 place-items-center rounded-full border-2 border-stone-900 bg-amber-400 text-base font-black">{s.n}</span>

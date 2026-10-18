@@ -6,17 +6,81 @@ import { useParams } from "next/navigation";
 import {
   AlarmClock, ArrowLeft, Calendar, MapPin, Users, Copy, Check, Share2, Trophy,
   Clock, Timer, Crown, Ghost, Zap, RefreshCw, Eye, Sparkles, Hourglass,
-  BadgeCheck, Lock, RotateCcw, PartyPopper, Flame, ChevronRight
+  BadgeCheck, Lock, RotateCcw, PartyPopper, Flame, ChevronRight, Minus, Plus
 } from "lucide-react";
-import { SLOTS, addMinutesToTime, slotByIndex } from "@/lib/slots";
+import { STEP_MINUTES, NO_SHOW_MINUTES, addMinutesToTime, slotByIndex, personaForMinutes, minutesToLabel, clampDelay } from "@/lib/slots";
 
 type Vote = { id: string; voterName: string; voterToken: string; slotIndex: number; slotMinutes: number; createdAt: string; updatedAt: string };
-type Dist = (typeof SLOTS)[number] & { count: number; pct: number };
+type Dist = { minutes: number; count: number; pct: number };
 type EventData = {
   id: string; slug: string; name: string; description: string; eventDate: string;
   startTime: string; location: string; organizerName: string; status: string;
-  actualSlotIndex: number | null; createdAt: string;
+  actualSlotIndex: number | null; actualSlotMinutes: number | null; createdAt: string;
 };
+
+function TimeStepper({
+  startTime, minutes, onChange, disabled, tone = "light",
+}: {
+  startTime: string;
+  minutes: number;
+  onChange: (m: number) => void;
+  disabled?: boolean;
+  tone?: "light" | "dark";
+}) {
+  const noShow = minutes >= NO_SHOW_MINUTES;
+  const persona = personaForMinutes(minutes);
+  const time = noShow ? "—" : addMinutesToTime(startTime, minutes);
+  const dark = tone === "dark";
+
+  const bump = (delta: number) => {
+    if (disabled) return;
+    const base = noShow ? 0 : minutes;
+    onChange(clampDelay(base + delta));
+  };
+
+  const btn = `grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 transition disabled:opacity-30 ${dark ? "border-stone-600 bg-stone-800 text-white hover:border-stone-400" : "border-stone-900 bg-white text-stone-900 hover:bg-amber-100"}`;
+  const group = `flex items-center justify-between gap-1 rounded-xl border-2 p-1.5 ${dark ? "border-stone-700 bg-stone-900/40" : "border-stone-900 bg-white"}`;
+  const chip = (active: boolean) => `rounded-full border-2 px-2.5 py-1 text-[11px] font-black transition disabled:opacity-40 ${active ? "border-amber-500 bg-amber-400 text-stone-900" : dark ? "border-stone-600 text-stone-200 hover:border-stone-400" : "border-stone-900 bg-white hover:bg-amber-100"}`;
+
+  return (
+    <div className={`rounded-2xl border-2 p-3.5 ${dark ? "border-stone-700 bg-stone-800/60" : "border-stone-900 bg-amber-50"}`}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className={`text-[10px] font-black tracking-wide ${dark ? "text-stone-400" : "text-stone-500"}`}>{noShow ? "SUA APOSTA" : "PREVISÃO DE CHEGADA"}</p>
+          <p className="font-display text-4xl font-black leading-none">{noShow ? "Não vem" : time}</p>
+          <p className={`mt-1 text-xs font-bold ${dark ? "text-amber-300" : "text-amber-700"}`}>{noShow ? "fora da régua do tempo" : `${minutesToLabel(minutes)} do início`}</p>
+        </div>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black ${dark ? "bg-amber-400 text-stone-900" : "bg-stone-900 text-white"}`}>{persona.badge}</span>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2.5">
+        <div className={group}>
+          <button type="button" disabled={disabled} onClick={() => bump(-60)} className={btn} aria-label="Menos uma hora"><Minus className="h-4 w-4" /></button>
+          <span className="text-center text-sm font-black leading-tight">HORA</span>
+          <button type="button" disabled={disabled} onClick={() => bump(60)} className={btn} aria-label="Mais uma hora"><Plus className="h-4 w-4" /></button>
+        </div>
+        <div className={group}>
+          <button type="button" disabled={disabled} onClick={() => bump(-STEP_MINUTES)} className={btn} aria-label="Menos 5 minutos"><Minus className="h-4 w-4" /></button>
+          <span className="text-center text-sm font-black leading-tight">MIN</span>
+          <button type="button" disabled={disabled} onClick={() => bump(STEP_MINUTES)} className={btn} aria-label="Mais 5 minutos"><Plus className="h-4 w-4" /></button>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-1.5">
+        {[30, 60, 120, 240].map((m) => (
+          <button key={m} type="button" disabled={disabled} onClick={() => onChange(m)} className={chip(!noShow && minutes === m)}>{minutesToLabel(m)}</button>
+        ))}
+        <button type="button" disabled={disabled} onClick={() => onChange(NO_SHOW_MINUTES)} className={chip(noShow)}>Não vem</button>
+      </div>
+
+      {!noShow && (
+        <p className={`mt-2.5 text-xs font-semibold leading-snug ${dark ? "text-stone-300" : "text-stone-600"}`}>
+          <span className="font-black">{persona.title}.</span> {persona.description}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function getOrCreateToken() {
   if (typeof window === "undefined") return "";
@@ -46,7 +110,7 @@ export default function EventPage() {
 
   const [voterName, setVoterName] = useState("");
   const [voterToken, setVoterToken] = useState("");
-  const [selected, setSelected] = useState<number | null>(null);
+  const [pick, setPick] = useState<number | null>(null);
   const [voting, setVoting] = useState(false);
   const [voteMsg, setVoteMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
@@ -54,7 +118,7 @@ export default function EventPage() {
   const [liveFlash, setLiveFlash] = useState(false);
   const prevTotal = useRef(0);
 
-  const [revealSlot, setRevealSlot] = useState<number>(2);
+  const [revealMinutes, setRevealMinutes] = useState<number>(60);
   const [revealing, setRevealing] = useState(false);
   const [showOrganizer, setShowOrganizer] = useState(false);
   const [nowTick, setNowTick] = useState(Date.now());
@@ -97,8 +161,8 @@ export default function EventPage() {
       setMyVote(data.myVote ?? null);
       // restore my vote selection
       const mine = data.myVote;
-      if (mine && !silent) setSelected(mine.slotIndex);
-      else if (mine) setSelected((cur) => cur ?? mine.slotIndex);
+      if (mine && !silent) setPick(mine.slotMinutes);
+      else if (mine) setPick((cur) => cur ?? mine.slotMinutes);
     } catch { /* retry */ } finally { setLoading(false); }
   }, [slug, organizerToken]);
 
@@ -117,7 +181,10 @@ export default function EventPage() {
   };
 
   const isOpen = event?.status === "open";
-  const isRevealed = event?.actualSlotIndex !== null && event?.actualSlotIndex !== undefined;
+  const actualMinutes = event
+    ? (event.actualSlotMinutes != null ? event.actualSlotMinutes : event.actualSlotIndex != null ? slotByIndex(event.actualSlotIndex).slotMinutes : null)
+    : null;
+  const isRevealed = actualMinutes !== null;
 
   const eventDateTime = useMemo(() => {
     if (!event) return null;
@@ -148,26 +215,26 @@ export default function EventPage() {
 
   const lateMeterPct = useMemo(() => {
     if (!totalVotes) return 8;
-    // 0 min -> 5%, 240 -> 90%, no-show pushes up
-    const base = Math.min(92, 5 + (avgDelay / 240) * 80 + (noShowCount / Math.max(1, totalVotes)) * 20);
+    // 0 min -> 5%, 480 -> 85%, no-show pushes up
+    const base = Math.min(92, 5 + (avgDelay / 480) * 80 + (noShowCount / Math.max(1, totalVotes)) * 20);
     return Math.round(base);
   }, [avgDelay, noShowCount, totalVotes]);
   const lateMeterLabel = lateMeterPct < 25 ? "OTIMISTA (INGÊNUO)" : lateMeterPct < 45 ? "ATRASINHO LEVE" : lateMeterPct < 65 ? "CLÁSSICO PEDRO" : lateMeterPct < 82 ? "MODO LENDA" : "ARQUIVO X / FANTASMA";
 
   async function handleVote() {
-    if (selected === null) { setVoteMsg({ type: "err", text: "Escolhe um horário primeiro! Clica num cartão aí embaixo." }); return; }
+    if (pick === null) { setVoteMsg({ type: "err", text: "Escolhe um horário primeiro! Use os botões de hora e minuto aí em cima." }); return; }
     if (!voterName.trim() || voterName.trim().length < 2) { setVoteMsg({ type: "err", text: "Coloca seu nome pra aposta valer — senão como a gente zoa depois?" }); document.getElementById("voter-name")?.focus(); return; }
     setVoting(true); setVoteMsg(null);
     try {
       localStorage.setItem("pedro_voter_name", voterName.trim());
       const res = await fetch(`/api/events/${slug}/vote`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ voterName: voterName.trim(), voterToken, slotIndex: selected }),
+        body: JSON.stringify({ voterName: voterName.trim(), voterToken, slotMinutes: pick }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao votar");
       setJustVoted(true); setTimeout(() => setJustVoted(false), 2600);
-      setVoteMsg({ type: "ok", text: data.isUpdate ? `Voto atualizado! Agora você está em ${slotByIndex(selected).label}. Pedro aprovaria essa indecisão.` : `Aposta registrada! Você cravou ${slotByIndex(selected).label}. Boa sorte — você vai precisar.` });
+      setVoteMsg({ type: "ok", text: data.isUpdate ? `Voto atualizado! Agora você apostou ${minutesToLabel(pick)} (${personaForMinutes(pick).title}). Pedro aprovaria essa indecisão.` : `Aposta registrada! Você cravou ${minutesToLabel(pick)} — ${personaForMinutes(pick).title}. Boa sorte — você vai precisar.` });
       await load(true);
     } catch (err) {
       setVoteMsg({ type: "err", text: err instanceof Error ? err.message : "Erro ao votar" });
@@ -184,7 +251,7 @@ export default function EventPage() {
           "Content-Type": "application/json",
           "x-organizer-token": token,
         },
-        body: JSON.stringify(action === "reveal" ? { action, actualSlotIndex: revealSlot, organizerToken: token } : { action, organizerToken: token }),
+        body: JSON.stringify(action === "reveal" ? { action, actualSlotMinutes: revealMinutes, organizerToken: token } : { action, organizerToken: token }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro");
@@ -225,8 +292,6 @@ export default function EventPage() {
       </div>
     );
   }
-
-  const maxCount = Math.max(1, ...distribution.map((d) => d.count));
 
   return (
     <div className="min-h-screen bg-amber-50">
@@ -297,7 +362,7 @@ export default function EventPage() {
                 </div>
                 {isOrganizer ? (
                   <div className="rounded-2xl border border-stone-700 bg-stone-800 p-3">
-                    <p className="font-display line-clamp-1 text-lg font-black">{topSlot && totalVotes ? `${topSlot.label}` : "—"}</p>
+                    <p className="font-display line-clamp-1 text-lg font-black">{topSlot && totalVotes ? (topSlot.minutes >= NO_SHOW_MINUTES ? "Não vem" : personaForMinutes(topSlot.minutes).label) : "—"}</p>
                     <p className="text-[10px] font-bold tracking-wide text-stone-400">FAVORITO DA GALERA{topSlot && totalVotes ? ` (${topSlot.count})` : ""}</p>
                   </div>
                 ) : (
@@ -309,7 +374,7 @@ export default function EventPage() {
               </div>
               {myVote && (
                 <p className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-400 p-3 text-sm font-bold text-stone-900">
-                  <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0" /> Sua aposta atual: {slotByIndex(myVote.slotIndex).label} ({event.startTime && myVote.slotMinutes !== 999 ? addMinutesToTime(event.startTime, myVote.slotMinutes) : "não vem"}) — pode trocar até fechar!
+                  <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0" /> Sua aposta atual: {myVote.slotMinutes >= NO_SHOW_MINUTES ? "Não vem" : `${addMinutesToTime(event.startTime, myVote.slotMinutes)} (${minutesToLabel(myVote.slotMinutes)})`} — pode trocar até fechar!
                 </p>
               )}
             </div>
@@ -317,17 +382,17 @@ export default function EventPage() {
         </section>
 
         {/* WINNER BANNER */}
-        {isRevealed && (
+        {isRevealed && actualMinutes !== null && (
           <section className="animate-pop mt-5 rounded-3xl border-2 border-stone-900 bg-amber-300 p-5 hard-shadow sm:p-6">
             <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
               <div>
                 <p className="flex items-center gap-2 font-display text-2xl font-black"><Trophy className="h-7 w-7" /> Resultado oficial!</p>
                 <p className="mt-1 text-sm font-semibold text-stone-800">
-                  Pedro chegou: <strong>{slotByIndex(event.actualSlotIndex!).label}</strong>
-                  {event.actualSlotIndex !== 9 && <> às <strong>{addMinutesToTime(event.startTime, slotByIndex(event.actualSlotIndex!).slotMinutes)}</strong></>} — {slotByIndex(event.actualSlotIndex!).title}. {slotByIndex(event.actualSlotIndex!).description}
+                  Pedro chegou: <strong>{actualMinutes >= NO_SHOW_MINUTES ? "não veio" : addMinutesToTime(event.startTime, actualMinutes)}</strong>
+                  {actualMinutes < NO_SHOW_MINUTES && <> às <strong>{minutesToLabel(actualMinutes)}</strong> do início</>} — {personaForMinutes(actualMinutes).title}. {personaForMinutes(actualMinutes).description}
                 </p>
               </div>
-              <span className="rounded-full border-2 border-stone-900 bg-white px-3 py-1.5 text-xs font-black">{winners.length} acertou(aram)</span>
+              <span className="rounded-full border-2 border-stone-900 bg-white px-3 py-1.5 text-xs font-black">{winners.length} {winners.length === 1 ? "chegou mais perto" : "chegaram mais perto"}</span>
             </div>
             {winners.length > 0 ? (
               <div className="mt-4 flex flex-wrap gap-2">
@@ -335,7 +400,7 @@ export default function EventPage() {
                 <span className="w-full text-xs font-semibold text-stone-700 sm:w-auto sm:self-center">Reis e rainhas da pontualidade alheia. O resto: só aceita.</span>
               </div>
             ) : (
-              <p className="mt-3 text-sm font-bold text-stone-800">Ninguém acertou. Nem quem apostou no pior cenário foi pessimista o suficiente. Impressionante, Pedro.</p>
+              <p className="mt-3 text-sm font-bold text-stone-800">Ninguém arriscou. Nem quem apostou no pior cenário foi pessimista o suficiente. Impressionante, Pedro.</p>
             )}
           </section>
         )}
@@ -348,7 +413,7 @@ export default function EventPage() {
                 <h2 className="font-display text-xl font-black sm:text-2xl">{isOpen ? "Que horas o Pedro pinta por aqui?" : "Apostas encerradas"}</h2>
                 <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-stone-700"><Zap className="h-3.5 w-3.5" /> Atualiza ao vivo</span>
               </div>
-              <p className="mt-1 text-sm text-stone-600">{isOpen ? "Escolhe um cartão, coloca seu nome e confirma. Mudou de ideia? É só votar de novo — sem julgamento (dessa vez)." : "O organizador fechou a votação. Se o Pedro ainda não chegou… bom, pelo menos vocês tentaram."}</p>
+              <p className="mt-1 text-sm text-stone-600">{isOpen ? "Escolhe a hora e o minuto, coloca seu nome e confirma. Vale do horário marcado até 8h depois. Mudou de ideia? É só votar de novo — sem julgamento (dessa vez)." : "O organizador fechou a votação. Se o Pedro ainda não chegou… bom, pelo menos vocês tentaram."}</p>
 
               {/* name input */}
               <div className="mt-4">
@@ -359,59 +424,22 @@ export default function EventPage() {
                 {myVote && <p className="mt-1.5 text-xs font-semibold text-emerald-700">Você já apostou como “{myVote.voterName}”. Escolher outro horário e confirmar troca sua aposta.</p>}
               </div>
 
-              {/* SLOT GRID */}
-              <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                {SLOTS.map((slot) => {
-                  const dist = distribution.find((d) => d.slotIndex === slot.slotIndex);
-                  const count = dist?.count ?? 0;
-                  const pct = dist?.pct ?? 0;
-                  const time = slot.slotMinutes === 999 ? null : addMinutesToTime(event.startTime, slot.slotMinutes);
-                  const isSelected = selected === slot.slotIndex;
-                  const isMine = myVote?.slotIndex === slot.slotIndex;
-                  const isActual = isRevealed && event.actualSlotIndex === slot.slotIndex;
-                  const barW = Math.round((count / maxCount) * 100);
-                  return (
-                    <button key={slot.slotIndex} type="button" disabled={!isOpen}
-                      onClick={() => { setSelected(slot.slotIndex); setVoteMsg(null); }}
-                      className={`group relative overflow-hidden rounded-2xl border-2 border-stone-900 p-3.5 text-left transition sm:p-4 ${isSelected ? "bg-stone-900 text-white hard-shadow-sm -translate-y-0.5" : isActual ? "bg-amber-300" : "bg-white hover:bg-amber-100"} ${!isOpen ? "cursor-not-allowed opacity-80" : "cursor-pointer"}`}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <p className="font-display text-2xl font-black leading-none">{slot.slotMinutes === 999 ? <span className="flex items-center gap-1.5"><Ghost className="h-6 w-6" /> Não vem</span> : time}</p>
-                          <p className={`mt-1 text-[11px] font-black tracking-wide ${isSelected ? "text-amber-300" : "text-amber-700"}`}>{slot.label} • {slot.badge}</p>
-                        </div>
-                        {isOrganizer && (
-                          <div className="text-right">
-                            <span className={`inline-block rounded-full px-2 py-1 text-[11px] font-black ${isSelected ? "bg-amber-400 text-stone-900" : "bg-stone-900 text-white"}`}>{count} voto{count === 1 ? "" : "s"}</span>
-                            <p className={`mt-1 text-[11px] font-bold ${isSelected ? "text-stone-300" : "text-stone-500"}`}>{totalVotes ? `${pct}% da galera` : "seja o 1º"}</p>
-                          </div>
-                        )}
-                      </div>
-                      <p className={`font-display mt-2 text-sm font-black ${isSelected ? "text-white" : "text-stone-900"}`}>{slot.title}</p>
-                      <p className={`mt-0.5 text-xs leading-snug ${isSelected ? "text-stone-300" : "text-stone-600"}`}>{slot.description}</p>
-                      {/* distribution bar */}
-                      {isOrganizer && (
-                        <div className={`mt-3 h-2.5 overflow-hidden rounded-full border ${isSelected ? "border-white/70 bg-stone-700" : "border-stone-900 bg-amber-100"}`}>
-                          <div className={`h-full transition-all duration-500 ${slot.slotMinutes === 999 ? "bg-red-500" : slot.slotMinutes === 0 ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${totalVotes ? Math.max(4, barW) : 0}%` }} />
-                        </div>
-                      )}
-                      {(isMine || isActual) && (
-                        <div className="mt-2 flex flex-wrap gap-1.5">
-                          {isMine && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-stone-900">SUA APOSTA</span>}
-                          {isActual && <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[10px] font-black text-amber-300">HORÁRIO REAL DO PEDRO</span>}
-                        </div>
-                      )}
-                      {isSelected && <span className="absolute right-3 top-14 grid h-6 w-6 place-items-center rounded-full bg-amber-400 text-stone-900"><Check className="h-4 w-4" /></span>}
-                    </button>
-                  );
-                })}
+              {/* TIME PICKER */}
+              <div className="mt-4">
+                <TimeStepper
+                  startTime={event.startTime}
+                  minutes={pick ?? 60}
+                  onChange={(m) => { setPick(m); setVoteMsg(null); }}
+                  disabled={!isOpen}
+                />
               </div>
 
               {voteMsg && <p className={`animate-pop mt-4 rounded-xl border-2 px-3.5 py-3 text-sm font-bold ${voteMsg.type === "ok" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-red-600 bg-red-50 text-red-700"}`}>{voteMsg.text}</p>}
               {justVoted && <p className="animate-pop mt-2 flex items-center gap-1.5 text-sm font-black text-stone-900"><PartyPopper className="h-4 w-4 text-amber-600" /> Aposta salva! Agora é só esperar. Literalmente. Por horas, talvez.</p>}
 
               {isOpen ? (
-                <button onClick={handleVote} disabled={voting || selected === null} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border-2 border-stone-900 bg-amber-400 py-3.5 font-display text-sm font-black text-stone-900 hard-shadow transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-50">
-                  {voting ? <><RefreshCw className="h-4 w-4 animate-spin" /> SALVANDO…</> : myVote ? <><RotateCcw className="h-4 w-4" /> {selected === myVote.slotIndex ? "CONFIRMAR MINHA APOSTA" : "TROCAR MINHA APOSTA"}</> : <><Sparkles className="h-4 w-4" /> CONFIRMAR APOSTA</>}
+                <button onClick={handleVote} disabled={voting || pick === null} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border-2 border-stone-900 bg-amber-400 py-3.5 font-display text-sm font-black text-stone-900 hard-shadow transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-50">
+                  {voting ? <><RefreshCw className="h-4 w-4 animate-spin" /> SALVANDO…</> : myVote ? <><RotateCcw className="h-4 w-4" /> {pick === myVote.slotMinutes ? "CONFIRMAR MINHA APOSTA" : "TROCAR MINHA APOSTA"}</> : <><Sparkles className="h-4 w-4" /> CONFIRMAR APOSTA</>}
                 </button>
               ) : (
                 <p className="mt-4 flex items-center gap-2 rounded-xl border-2 border-stone-900 bg-stone-100 px-3.5 py-3 text-sm font-bold text-stone-700"><Lock className="h-4 w-4 shrink-0" /> Votação fechada. {isRevealed ? "Resultado revelado acima!" : "Aguardando o organizador revelar que horas o Pedro chegou."}</p>
@@ -427,15 +455,15 @@ export default function EventPage() {
                 <p className="mt-3 text-sm text-stone-600">Nenhuma aposta ainda. A galera está esperando o Pedro pra decidir? Não façam isso. Apostem logo aqui em cima.</p>
               ) : (
                 <div className="mt-4 space-y-2">
-                  {distribution.map((d) => (
-                    <div key={d.slotIndex} className="text-xs sm:text-sm">
+                  {distribution.filter((d) => d.count > 0).map((d) => (
+                    <div key={d.minutes} className="text-xs sm:text-sm">
                       <div className="mb-1 flex items-center justify-between gap-2">
-                        <span className="truncate font-black">{d.slotMinutes === 999 ? "Não vem" : `${addMinutesToTime(event.startTime, d.slotMinutes)} (${d.label})`}</span>
+                        <span className="truncate font-black">{d.minutes >= NO_SHOW_MINUTES ? "Não vem" : `${addMinutesToTime(event.startTime, d.minutes)} · ${personaForMinutes(d.minutes).badge}`}</span>
                         <span className="shrink-0 text-[11px] font-bold text-stone-500 sm:hidden">{d.count} voto{d.count === 1 ? "" : "s"}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="h-6 flex-1 overflow-hidden rounded-lg border-2 border-stone-900 bg-amber-100">
-                          <div className={`flex h-full items-center px-2 text-[11px] font-black text-white transition-all duration-500 ${d.slotMinutes === 999 ? "bg-red-500" : d.slotMinutes === 0 ? "bg-emerald-500" : "bg-stone-900"}`} style={{ width: `${Math.max(d.count ? 12 : 0, d.pct)}%` }}>{d.count > 0 ? `${d.count} • ${d.pct}%` : ""}</div>
+                          <div className={`flex h-full items-center px-2 text-[11px] font-black text-white transition-all duration-500 ${d.minutes >= NO_SHOW_MINUTES ? "bg-red-500" : d.minutes === 0 ? "bg-emerald-500" : "bg-stone-900"}`} style={{ width: `${Math.max(d.count ? 12 : 0, d.pct)}%` }}>{d.count} • {d.pct}%</div>
                         </div>
                         <span className="hidden w-14 shrink-0 text-right font-bold text-stone-500 sm:inline">{d.count} voto{d.count === 1 ? "" : "s"}</span>
                       </div>
@@ -457,16 +485,16 @@ export default function EventPage() {
               ) : (
                 <ul className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-1">
                   {[...votes].reverse().map((v) => {
-                    const s = slotByIndex(v.slotIndex);
-                    const isWinner = isRevealed && v.slotIndex === event.actualSlotIndex;
+                    const noShow = v.slotMinutes >= NO_SHOW_MINUTES;
+                    const isWinner = winners.some((w) => w.id === v.id);
                     return (
                       <li key={v.id} className={`flex items-center justify-between gap-2 rounded-2xl border-2 border-stone-900 px-3 py-2.5 ${isWinner ? "bg-amber-300" : v.voterToken === voterToken ? "bg-emerald-50" : "bg-amber-50"}`}>
                         <div className="min-w-0">
                           <p className="truncate text-sm font-black">{v.voterName} {v.voterToken === voterToken && <span className="text-[10px] text-emerald-700">(você)</span>} {isWinner && <Crown className="inline h-4 w-4 text-amber-700" />}</p>
-                          <p className="truncate text-[11px] font-semibold text-stone-500">{s.title}</p>
+                          <p className="truncate text-[11px] font-semibold text-stone-500">{noShow ? "Não vem" : personaForMinutes(v.slotMinutes).title}</p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-black ${s.slotMinutes === 999 ? "bg-red-500 text-white" : s.slotMinutes === 0 ? "bg-emerald-500 text-white" : "bg-stone-900 text-white"}`}>
-                          {s.slotMinutes === 999 ? "Não vem" : addMinutesToTime(event.startTime, s.slotMinutes)}
+                        <span className={`shrink-0 rounded-full px-2 py-1 text-[11px] font-black ${noShow ? "bg-red-500 text-white" : v.slotMinutes === 0 ? "bg-emerald-500 text-white" : "bg-stone-900 text-white"}`}>
+                          {noShow ? "Não vem" : addMinutesToTime(event.startTime, v.slotMinutes)}
                         </span>
                       </li>
                     );
@@ -530,12 +558,8 @@ export default function EventPage() {
                         ✓ Você é o organizador deste bolão. Apenas você tem acesso a estes controles.
                       </div>
                       <label className="text-[11px] font-black tracking-wide text-amber-300">QUE HORAS O PEDRO CHEGOU DE VERDADE?</label>
-                      <div className="mt-2 grid grid-cols-2 gap-1.5">
-                        {SLOTS.map((s) => (
-                          <button key={s.slotIndex} onClick={() => setRevealSlot(s.slotIndex)} className={`rounded-xl border-2 px-2 py-2 text-left text-xs font-black transition ${revealSlot === s.slotIndex ? "border-amber-400 bg-amber-400 text-stone-900" : "border-stone-700 bg-stone-800 text-white hover:border-stone-500"}`}>
-                            {s.slotMinutes === 999 ? "Não apareceu" : `${addMinutesToTime(event.startTime, s.slotMinutes)} (${s.label})`}
-                          </button>
-                        ))}
+                      <div className="mt-2">
+                        <TimeStepper startTime={event.startTime} minutes={revealMinutes} onChange={setRevealMinutes} tone="dark" />
                       </div>
                       <button onClick={() => organizerAction("reveal")} disabled={revealing} className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-amber-400 py-3 font-display text-sm font-black text-stone-900 disabled:opacity-60">
                         {revealing ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Trophy className="h-4 w-4" />} REVELAR RESULTADO
@@ -597,7 +621,7 @@ export default function EventPage() {
         </div>
 
         <p className="mt-8 text-center text-xs font-medium text-stone-500">
-          <Clock className="mr-1 inline h-3.5 w-3.5" /> Horários gerados a cada 30 min por 4h a partir das {event.startTime} • Link do bolão: <button onClick={copyLink} className="font-bold underline underline-offset-2">{copied ? "Copiado!" : "copiar link"}</button>
+          <Clock className="mr-1 inline h-3.5 w-3.5" /> Aposte qualquer horário das {event.startTime} até 8h depois, em passos de 5 min • Link do bolão: <button onClick={copyLink} className="font-bold underline underline-offset-2">{copied ? "Copiado!" : "copiar link"}</button>
         </p>
       </main>
     </div>

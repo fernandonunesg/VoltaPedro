@@ -11,7 +11,8 @@ export const events = pgTable("events", {
   organizerName: text("organizer_name").notNull().default("Anônimo"),
   organizerToken: text("organizer_token"), // token secreto do organizador
   status: text("status").notNull().default("open"), // open | closed
-  actualSlotIndex: integer("actual_slot_index"), // null until revealed
+  actualSlotIndex: integer("actual_slot_index"), // null until revealed (legado: 0..8 timed, 9 = no-show)
+  actualSlotMinutes: integer("actual_slot_minutes"), // null until revealed (0..480 timed, 999 = no-show)
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 

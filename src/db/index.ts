@@ -42,6 +42,8 @@ const SCHEMA_DDL = `
   );
 
   CREATE UNIQUE INDEX IF NOT EXISTS votes_event_token_unique ON votes(event_id, voter_token);
+
+  ALTER TABLE events ADD COLUMN IF NOT EXISTS actual_slot_minutes INTEGER;
 `;
 
 function getPglite() {

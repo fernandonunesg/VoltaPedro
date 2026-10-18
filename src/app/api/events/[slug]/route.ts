@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db, ensureSchema } from "@/db";
 import { events, votes } from "@/db/schema";
 import { eq, asc, sql } from "drizzle-orm";
-import { SLOTS } from "@/lib/slots";
+import { MAX_DELAY_MINUTES, NO_SHOW_MINUTES, STEP_MINUTES, bucketOf, clampDelay, slotByIndex } from "@/lib/slots";
 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
   try {
@@ -21,18 +21,31 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
 
     const allVotes = await db.select().from(votes).where(eq(votes.eventId, ev.id)).orderBy(asc(votes.createdAt));
 
-    const distribution = SLOTS.map((s) => {
-      const count = allVotes.filter((v) => v.slotIndex === s.slotIndex).length;
-      return { ...s, count, pct: allVotes.length ? Math.round((count / allVotes.length) * 100) : 0 };
+    // Distribuição por faixas de 30 min (0..8h) + "não vem".
+    const buckets = Array.from({ length: MAX_DELAY_MINUTES / 30 + 1 }, (_, i) => i * 30);
+    const distribution = [...buckets, NO_SHOW_MINUTES].map((minutes) => {
+      const count = allVotes.filter((v) => bucketOf(v.slotMinutes) === minutes).length;
+      return { minutes, count, pct: allVotes.length ? Math.round((count / allVotes.length) * 100) : 0 };
     });
 
-    const timed = allVotes.filter((v) => v.slotMinutes < 999);
+    const timed = allVotes.filter((v) => v.slotMinutes < NO_SHOW_MINUTES);
     const avg = timed.length ? Math.round(timed.reduce((a, v) => a + v.slotMinutes, 0) / timed.length) : 0;
-    const noShow = allVotes.filter((v) => v.slotIndex === 9).length;
+    const noShow = allVotes.filter((v) => v.slotMinutes >= NO_SHOW_MINUTES).length;
 
-    // winners if revealed (público: aparece pra todos quando o resultado é revelado)
+    // Vencedores: quem chegar mais perto do horário real. Eventos antigos (sem minutos) usam o slot.
     let winners: typeof allVotes = [];
-    if (ev.actualSlotIndex !== null && ev.actualSlotIndex !== undefined) {
+    const actualMin = ev.actualSlotMinutes ?? null;
+    if (actualMin !== null) {
+      if (actualMin >= NO_SHOW_MINUTES) {
+        winners = allVotes.filter((v) => v.slotMinutes >= NO_SHOW_MINUTES);
+      } else {
+        const timedVotes = allVotes.filter((v) => v.slotMinutes < NO_SHOW_MINUTES);
+        if (timedVotes.length) {
+          const best = Math.min(...timedVotes.map((v) => Math.abs(v.slotMinutes - actualMin)));
+          winners = timedVotes.filter((v) => Math.abs(v.slotMinutes - actualMin) === best);
+        }
+      }
+    } else if (ev.actualSlotIndex !== null && ev.actualSlotIndex !== undefined) {
       winners = allVotes.filter((v) => v.slotIndex === ev.actualSlotIndex);
     }
 
@@ -88,14 +101,21 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ slug: str
       );
     }
 
-    const updates: Partial<{ status: string; actualSlotIndex: number | null }> = {};
+    const updates: Partial<{ status: string; actualSlotIndex: number | null; actualSlotMinutes: number | null }> = {};
     if (body.action === "reveal") {
-      const idx = Number(body.actualSlotIndex);
-      if (!SLOTS.some((s) => s.slotIndex === idx)) return NextResponse.json({ error: "Horário real inválido" }, { status: 400 });
-      updates.actualSlotIndex = idx;
+      const raw = body.actualSlotMinutes != null
+        ? Number(body.actualSlotMinutes)
+        : body.actualSlotIndex != null
+          ? slotByIndex(Number(body.actualSlotIndex)).slotMinutes
+          : NaN;
+      if (!Number.isFinite(raw)) return NextResponse.json({ error: "Horário real inválido" }, { status: 400 });
+      const minutes = raw >= NO_SHOW_MINUTES ? NO_SHOW_MINUTES : clampDelay(Math.round(raw / STEP_MINUTES) * STEP_MINUTES);
+      updates.actualSlotMinutes = minutes;
+      updates.actualSlotIndex = minutes >= NO_SHOW_MINUTES ? 9 : Math.min(8, Math.round(minutes / 30));
       updates.status = "closed";
     } else if (body.action === "reopen") {
       updates.actualSlotIndex = null;
+      updates.actualSlotMinutes = null;
       updates.status = "open";
     } else if (body.action === "close") {
       updates.status = "closed";
