@@ -317,7 +317,7 @@ export default function HomePage() {
           <div className="mt-8 grid gap-4 md:grid-cols-3">
             {[
               { n: "1", icon: Calendar, title: "Organizador cria", desc: "Nome, data e horário oficial do evento. A janela de aposta vai do horário marcado até 8h depois." },
-              { n: "2", icon: Link2, title: "Galera aposta pelo link", desc: "Cada pessoa escolhe a hora e o minuto com o nome dela. Pode mudar de ideia até a votação fechar. Um voto por pessoa, sem bagunça." },
+              { n: "2", icon: Link2, title: "Galera aposta pelo link", desc: "Cada pessoa escolhe a hora e o minuto com o nome dela. A aposta é única e definitiva: uma vez confirmada, não dá mais pra mudar. Sem bagunça." },
               { n: "3", icon: Trophy, title: "Pedro (talvez) chega", desc: "Quando ele aparecer — ou não — o organizador revela o horário real e o app coroa quem chegou mais perto. Glória eterna no grupo." },
             ].map((s) => (
               <div key={s.n} className="relative rounded-3xl border-2 border-stone-900 bg-amber-50 p-5 hard-shadow-sm">

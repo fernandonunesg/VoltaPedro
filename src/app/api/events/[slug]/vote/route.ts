@@ -42,30 +42,26 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ slug: stri
       .where(and(eq(votes.eventId, ev.id), eq(votes.voterToken, voterToken)))
       .limit(1);
 
-    let vote;
-    let changed = false;
+    // Aposta é definitiva: quem já apostou não troca mais.
     if (existing) {
-      changed = existing.slotMinutes !== minutes;
-      const [updated] = await db
-        .update(votes)
-        .set({ voterName, slotIndex, slotMinutes: minutes, updatedAt: new Date() })
-        .where(eq(votes.id, existing.id))
-        .returning();
-      vote = updated;
-    } else {
-      const [created] = await db
-        .insert(votes)
-        .values({ eventId: ev.id, voterName, voterToken, slotIndex, slotMinutes: minutes })
-        .returning();
-      vote = created;
+      return NextResponse.json(
+        { error: "Você já apostou — e aposta é aposta. Sem trocas dessa vez, igual o Pedro: apareceu uma vez e sumiu." },
+        { status: 409 }
+      );
     }
+
+    const [created] = await db
+      .insert(votes)
+      .values({ eventId: ev.id, voterName, voterToken, slotIndex, slotMinutes: minutes })
+      .returning();
+    const vote = created;
 
     const [countRow] = await db
       .select({ c: sql<number>`count(*)::int` })
       .from(votes)
       .where(eq(votes.eventId, ev.id));
 
-    return NextResponse.json({ vote, changed, isUpdate: !!existing, totalVotes: countRow?.c ?? 0 });
+    return NextResponse.json({ vote, isUpdate: false, totalVotes: countRow?.c ?? 0 });
   } catch (e) {
     console.error(e);
     return NextResponse.json({ error: "Erro ao votar" }, { status: 500 });

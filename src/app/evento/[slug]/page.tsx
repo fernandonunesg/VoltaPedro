@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import {
   AlarmClock, ArrowLeft, Calendar, MapPin, Users, Copy, Check, Share2, Trophy,
   Clock, Timer, Crown, Ghost, Zap, RefreshCw, Eye, Sparkles, Hourglass,
-  BadgeCheck, Lock, RotateCcw, PartyPopper, Flame, ChevronRight, Minus, Plus
+  BadgeCheck, Lock, PartyPopper, Flame, ChevronRight, Minus, Plus
 } from "lucide-react";
 import { STEP_MINUTES, NO_SHOW_MINUTES, addMinutesToTime, slotByIndex, personaForMinutes, minutesToLabel, clampDelay } from "@/lib/slots";
 
@@ -234,7 +234,7 @@ export default function EventPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erro ao votar");
       setJustVoted(true); setTimeout(() => setJustVoted(false), 2600);
-      setVoteMsg({ type: "ok", text: data.isUpdate ? `Voto atualizado! Agora você apostou ${minutesToLabel(pick)} (${personaForMinutes(pick).title}). Pedro aprovaria essa indecisão.` : `Aposta registrada! Você cravou ${minutesToLabel(pick)} — ${personaForMinutes(pick).title}. Boa sorte — você vai precisar.` });
+      setVoteMsg({ type: "ok", text: `Aposta registrada e travada! Você cravou ${minutesToLabel(pick)} — ${personaForMinutes(pick).title}. Agora não dá mais pra mudar. Boa sorte — você vai precisar.` });
       await load(true);
     } catch (err) {
       setVoteMsg({ type: "err", text: err instanceof Error ? err.message : "Erro ao votar" });
@@ -374,7 +374,7 @@ export default function EventPage() {
               </div>
               {myVote && (
                 <p className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-400 p-3 text-sm font-bold text-stone-900">
-                  <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0" /> Sua aposta atual: {myVote.slotMinutes >= NO_SHOW_MINUTES ? "Não vem" : `${addMinutesToTime(event.startTime, myVote.slotMinutes)} (${minutesToLabel(myVote.slotMinutes)})`} — pode trocar até fechar!
+                  <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0" /> Sua aposta atual: {myVote.slotMinutes >= NO_SHOW_MINUTES ? "Não vem" : `${addMinutesToTime(event.startTime, myVote.slotMinutes)} (${minutesToLabel(myVote.slotMinutes)})`} — travada, sem trocas!
                 </p>
               )}
             </div>
@@ -413,38 +413,60 @@ export default function EventPage() {
                 <h2 className="font-display text-xl font-black sm:text-2xl">{isOpen ? "Que horas o Pedro pinta por aqui?" : "Apostas encerradas"}</h2>
                 <span className="flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-black text-stone-700"><Zap className="h-3.5 w-3.5" /> Atualiza ao vivo</span>
               </div>
-              <p className="mt-1 text-sm text-stone-600">{isOpen ? "Escolhe a hora e o minuto, coloca seu nome e confirma. Vale do horário marcado até 8h depois. Mudou de ideia? É só votar de novo — sem julgamento (dessa vez)." : "O organizador fechou a votação. Se o Pedro ainda não chegou… bom, pelo menos vocês tentaram."}</p>
+              <p className="mt-1 text-sm text-stone-600">{isOpen ? "Escolhe a hora e o minuto, coloca seu nome e confirma. Vale do horário marcado até 8h depois. Atenção: a aposta é definitiva — depois de confirmar, não dá mais pra mudar." : "O organizador fechou a votação. Se o Pedro ainda não chegou… bom, pelo menos vocês tentaram."}</p>
 
-              {/* name input */}
-              <div className="mt-4">
-                <label htmlFor="voter-name" className="text-xs font-black tracking-wide">SEU NOME PRA APOSTA *</label>
-                <input id="voter-name" value={voterName} onChange={(e) => setVoterName(e.target.value)} placeholder="Ex: Juliano, Pri, Carlos…" maxLength={40}
-                  disabled={!isOpen}
-                  className="mt-1.5 w-full rounded-xl border-2 border-stone-900 bg-amber-50 px-3.5 py-3 text-sm font-semibold outline-none placeholder:font-normal focus:bg-white disabled:opacity-50" />
-                {myVote && <p className="mt-1.5 text-xs font-semibold text-emerald-700">Você já apostou como “{myVote.voterName}”. Escolher outro horário e confirmar troca sua aposta.</p>}
-              </div>
+              {myVote ? (
+                <div className="mt-4 rounded-2xl border-2 border-stone-900 bg-emerald-50 p-4">
+                  <div className="flex items-center gap-2.5">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full border-2 border-stone-900 bg-emerald-500 text-white"><Lock className="h-4 w-4" /></span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-black tracking-wide text-emerald-700">APOSTA TRAVADA</p>
+                      <p className="truncate text-sm font-black">{myVote.voterName}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-end justify-between gap-2">
+                    <div>
+                      <p className="font-display text-4xl font-black leading-none">{myVote.slotMinutes >= NO_SHOW_MINUTES ? "Não vem" : addMinutesToTime(event.startTime, myVote.slotMinutes)}</p>
+                      <p className="mt-1 text-xs font-bold text-amber-700">{myVote.slotMinutes >= NO_SHOW_MINUTES ? "fora da régua do tempo" : `${minutesToLabel(myVote.slotMinutes)} do início`}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-stone-900 px-2.5 py-1 text-[10px] font-black text-white">{personaForMinutes(myVote.slotMinutes).badge}</span>
+                  </div>
+                  <p className="mt-2.5 text-xs font-semibold text-stone-600"><span className="font-black">{personaForMinutes(myVote.slotMinutes).title}.</span> {personaForMinutes(myVote.slotMinutes).description}</p>
+                  <p className="mt-3 flex items-center gap-1.5 text-[11px] font-medium text-stone-500"><Lock className="h-3.5 w-3.5" /> Aposta única e definitiva. Igual o Pedro: apareceu uma vez e sumiu.</p>
+                </div>
+              ) : (
+                <>
+                  {/* name input */}
+                  <div className="mt-4">
+                    <label htmlFor="voter-name" className="text-xs font-black tracking-wide">SEU NOME PRA APOSTA *</label>
+                    <input id="voter-name" value={voterName} onChange={(e) => setVoterName(e.target.value)} placeholder="Ex: Juliano, Pri, Carlos…" maxLength={40}
+                      disabled={!isOpen}
+                      className="mt-1.5 w-full rounded-xl border-2 border-stone-900 bg-amber-50 px-3.5 py-3 text-sm font-semibold outline-none placeholder:font-normal focus:bg-white disabled:opacity-50" />
+                  </div>
 
-              {/* TIME PICKER */}
-              <div className="mt-4">
-                <TimeStepper
-                  startTime={event.startTime}
-                  minutes={pick ?? 60}
-                  onChange={(m) => { setPick(m); setVoteMsg(null); }}
-                  disabled={!isOpen}
-                />
-              </div>
+                  {/* TIME PICKER */}
+                  <div className="mt-4">
+                    <TimeStepper
+                      startTime={event.startTime}
+                      minutes={pick ?? 60}
+                      onChange={(m) => { setPick(m); setVoteMsg(null); }}
+                      disabled={!isOpen}
+                    />
+                  </div>
+
+                  {isOpen ? (
+                    <button onClick={handleVote} disabled={voting || pick === null} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border-2 border-stone-900 bg-amber-400 py-3.5 font-display text-sm font-black text-stone-900 hard-shadow transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-50">
+                      {voting ? <><RefreshCw className="h-4 w-4 animate-spin" /> SALVANDO…</> : <><Sparkles className="h-4 w-4" /> CONFIRMAR APOSTA</>}
+                    </button>
+                  ) : (
+                    <p className="mt-4 flex items-center gap-2 rounded-xl border-2 border-stone-900 bg-stone-100 px-3.5 py-3 text-sm font-bold text-stone-700"><Lock className="h-4 w-4 shrink-0" /> Votação fechada. {isRevealed ? "Resultado revelado acima!" : "Aguardando o organizador revelar que horas o Pedro chegou."}</p>
+                  )}
+                </>
+              )}
 
               {voteMsg && <p className={`animate-pop mt-4 rounded-xl border-2 px-3.5 py-3 text-sm font-bold ${voteMsg.type === "ok" ? "border-emerald-600 bg-emerald-50 text-emerald-800" : "border-red-600 bg-red-50 text-red-700"}`}>{voteMsg.text}</p>}
-              {justVoted && <p className="animate-pop mt-2 flex items-center gap-1.5 text-sm font-black text-stone-900"><PartyPopper className="h-4 w-4 text-amber-600" /> Aposta salva! Agora é só esperar. Literalmente. Por horas, talvez.</p>}
-
-              {isOpen ? (
-                <button onClick={handleVote} disabled={voting || pick === null} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border-2 border-stone-900 bg-amber-400 py-3.5 font-display text-sm font-black text-stone-900 hard-shadow transition hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none disabled:cursor-not-allowed disabled:opacity-50">
-                  {voting ? <><RefreshCw className="h-4 w-4 animate-spin" /> SALVANDO…</> : myVote ? <><RotateCcw className="h-4 w-4" /> {pick === myVote.slotMinutes ? "CONFIRMAR MINHA APOSTA" : "TROCAR MINHA APOSTA"}</> : <><Sparkles className="h-4 w-4" /> CONFIRMAR APOSTA</>}
-                </button>
-              ) : (
-                <p className="mt-4 flex items-center gap-2 rounded-xl border-2 border-stone-900 bg-stone-100 px-3.5 py-3 text-sm font-bold text-stone-700"><Lock className="h-4 w-4 shrink-0" /> Votação fechada. {isRevealed ? "Resultado revelado acima!" : "Aguardando o organizador revelar que horas o Pedro chegou."}</p>
-              )}
-              <p className="mt-2.5 text-center text-[11px] font-medium text-stone-500">1 voto por pessoa (neste aparelho/navegador). Pode trocar quantas vezes quiser até fechar. Os resultados atualizam sozinhos.</p>
+              {justVoted && <p className="animate-pop mt-2 flex items-center gap-1.5 text-sm font-black text-stone-900"><PartyPopper className="h-4 w-4 text-amber-600" /> Aposta salva e travada! Agora é só esperar. Literalmente. Por horas, talvez.</p>}
+              <p className="mt-2.5 text-center text-[11px] font-medium text-stone-500">1 voto por pessoa (neste aparelho/navegador). A aposta é definitiva — depois de confirmar, não dá mais pra trocar. Os resultados atualizam sozinhos.</p>
             </section>
 
             {/* DISTRIBUTION SUMMARY (só organizador) */}
