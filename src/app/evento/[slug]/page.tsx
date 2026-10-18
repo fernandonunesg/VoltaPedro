@@ -40,6 +40,7 @@ export default function EventPage() {
   const [avgDelay, setAvgDelay] = useState(0);
   const [noShowCount, setNoShowCount] = useState(0);
   const [winners, setWinners] = useState<{ id: string; voterName: string; slotIndex: number }[]>([]);
+  const [myVote, setMyVote] = useState<{ id: string; voterName: string; slotIndex: number; slotMinutes: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -75,9 +76,13 @@ export default function EventPage() {
   const load = useCallback(async (silent = false) => {
     try {
       const token = localStorage.getItem(`pedro_organizer_${slug}`) || organizerToken;
+      const voterTok = getOrCreateToken();
       const res = await fetch(`/api/events/${slug}`, {
         cache: "no-store",
-        headers: token ? { "x-organizer-token": token } : {},
+        headers: {
+          ...(token ? { "x-organizer-token": token } : {}),
+          ...(voterTok ? { "x-voter-token": voterTok } : {}),
+        },
       });
       if (res.status === 404) { setNotFound(true); return; }
       const data = await res.json();
@@ -89,9 +94,9 @@ export default function EventPage() {
       setTotalVotes(data.totalVotes); setAvgDelay(data.avgPredictedDelay);
       setNoShowCount(data.noShowCount); setWinners(data.winners || []);
       setIsOrganizer(Boolean(data.isOrganizer));
+      setMyVote(data.myVote ?? null);
       // restore my vote selection
-      const voterTok = getOrCreateToken();
-      const mine = (data.votes as Vote[]).find((v) => v.voterToken === voterTok);
+      const mine = data.myVote;
       if (mine && !silent) setSelected(mine.slotIndex);
       else if (mine) setSelected((cur) => cur ?? mine.slotIndex);
     } catch { /* retry */ } finally { setLoading(false); }
@@ -111,7 +116,6 @@ export default function EventPage() {
     load(false);
   };
 
-  const myVote = useMemo(() => votes.find((v) => v.voterToken === voterToken) || null, [votes, voterToken]);
   const isOpen = event?.status === "open";
   const isRevealed = event?.actualSlotIndex !== null && event?.actualSlotIndex !== undefined;
 
@@ -291,10 +295,17 @@ export default function EventPage() {
                 <div className="rounded-2xl border border-stone-700 bg-stone-800 p-3">
                   <p className="font-display text-2xl font-black">{totalVotes}</p><p className="text-[10px] font-bold tracking-wide text-stone-400">APOSTAS</p>
                 </div>
-                <div className="rounded-2xl border border-stone-700 bg-stone-800 p-3">
-                  <p className="font-display line-clamp-1 text-lg font-black">{topSlot && totalVotes ? `${topSlot.label}` : "—"}</p>
-                  <p className="text-[10px] font-bold tracking-wide text-stone-400">FAVORITO DA GALERA{topSlot && totalVotes ? ` (${topSlot.count})` : ""}</p>
-                </div>
+                {isOrganizer ? (
+                  <div className="rounded-2xl border border-stone-700 bg-stone-800 p-3">
+                    <p className="font-display line-clamp-1 text-lg font-black">{topSlot && totalVotes ? `${topSlot.label}` : "—"}</p>
+                    <p className="text-[10px] font-bold tracking-wide text-stone-400">FAVORITO DA GALERA{topSlot && totalVotes ? ` (${topSlot.count})` : ""}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-stone-700 bg-stone-800 p-3">
+                    <p className="font-display text-2xl font-black">{noShowCount}</p>
+                    <p className="text-[10px] font-bold tracking-wide text-stone-400">JÁ DESISTIRAM (NÃO VEM)</p>
+                  </div>
+                )}
               </div>
               {myVote && (
                 <p className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-400 p-3 text-sm font-bold text-stone-900">
@@ -368,17 +379,21 @@ export default function EventPage() {
                           <p className="font-display text-2xl font-black leading-none">{slot.slotMinutes === 999 ? <span className="flex items-center gap-1.5"><Ghost className="h-6 w-6" /> Não vem</span> : time}</p>
                           <p className={`mt-1 text-[11px] font-black tracking-wide ${isSelected ? "text-amber-300" : "text-amber-700"}`}>{slot.label} • {slot.badge}</p>
                         </div>
-                        <div className="text-right">
-                          <span className={`inline-block rounded-full px-2 py-1 text-[11px] font-black ${isSelected ? "bg-amber-400 text-stone-900" : "bg-stone-900 text-white"}`}>{count} voto{count === 1 ? "" : "s"}</span>
-                          <p className={`mt-1 text-[11px] font-bold ${isSelected ? "text-stone-300" : "text-stone-500"}`}>{totalVotes ? `${pct}% da galera` : "seja o 1º"}</p>
-                        </div>
+                        {isOrganizer && (
+                          <div className="text-right">
+                            <span className={`inline-block rounded-full px-2 py-1 text-[11px] font-black ${isSelected ? "bg-amber-400 text-stone-900" : "bg-stone-900 text-white"}`}>{count} voto{count === 1 ? "" : "s"}</span>
+                            <p className={`mt-1 text-[11px] font-bold ${isSelected ? "text-stone-300" : "text-stone-500"}`}>{totalVotes ? `${pct}% da galera` : "seja o 1º"}</p>
+                          </div>
+                        )}
                       </div>
                       <p className={`font-display mt-2 text-sm font-black ${isSelected ? "text-white" : "text-stone-900"}`}>{slot.title}</p>
                       <p className={`mt-0.5 text-xs leading-snug ${isSelected ? "text-stone-300" : "text-stone-600"}`}>{slot.description}</p>
                       {/* distribution bar */}
-                      <div className={`mt-3 h-2.5 overflow-hidden rounded-full border ${isSelected ? "border-white/70 bg-stone-700" : "border-stone-900 bg-amber-100"}`}>
-                        <div className={`h-full transition-all duration-500 ${slot.slotMinutes === 999 ? "bg-red-500" : slot.slotMinutes === 0 ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${totalVotes ? Math.max(4, barW) : 0}%` }} />
-                      </div>
+                      {isOrganizer && (
+                        <div className={`mt-3 h-2.5 overflow-hidden rounded-full border ${isSelected ? "border-white/70 bg-stone-700" : "border-stone-900 bg-amber-100"}`}>
+                          <div className={`h-full transition-all duration-500 ${slot.slotMinutes === 999 ? "bg-red-500" : slot.slotMinutes === 0 ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${totalVotes ? Math.max(4, barW) : 0}%` }} />
+                        </div>
+                      )}
                       {(isMine || isActual) && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {isMine && <span className="rounded-full bg-emerald-400 px-2 py-0.5 text-[10px] font-black text-stone-900">SUA APOSTA</span>}
@@ -404,7 +419,8 @@ export default function EventPage() {
               <p className="mt-2.5 text-center text-[11px] font-medium text-stone-500">1 voto por pessoa (neste aparelho/navegador). Pode trocar quantas vezes quiser até fechar. Os resultados atualizam sozinhos.</p>
             </section>
 
-            {/* DISTRIBUTION SUMMARY */}
+            {/* DISTRIBUTION SUMMARY (só organizador) */}
+            {isOrganizer && (
             <section className="mt-5 rounded-3xl border-2 border-stone-900 bg-white p-5 hard-shadow sm:p-6">
               <h3 className="font-display flex items-center gap-2 text-lg font-black"><Eye className="h-5 w-5" /> Placar da galera <span className="rounded-full bg-stone-900 px-2 py-0.5 text-[11px] text-white">{totalVotes} votos</span></h3>
               {totalVotes === 0 ? (
@@ -428,10 +444,12 @@ export default function EventPage() {
                 </div>
               )}
             </section>
+            )}
           </div>
 
           {/* SIDEBAR: VOTERS + ORGANIZER */}
           <div className="space-y-5">
+            {isOrganizer ? (
             <section className="rounded-3xl border-2 border-stone-900 bg-white p-5 hard-shadow">
               <h3 className="font-display flex items-center gap-2 text-lg font-black"><Users className="h-5 w-5" /> Quem já apostou <span className="rounded-full bg-amber-400 px-2 py-0.5 text-[11px] font-black">{votes.length}</span></h3>
               {votes.length === 0 ? (
@@ -457,6 +475,33 @@ export default function EventPage() {
               )}
               <button onClick={() => load(true)} className="mt-3 inline-flex items-center gap-1.5 text-xs font-black text-stone-700 underline underline-offset-2"><RefreshCw className="h-3.5 w-3.5" /> Atualizar agora</button>
             </section>
+            ) : (
+            <section className="rounded-3xl border-2 border-stone-900 bg-stone-900 p-5 text-white hard-shadow">
+              <h3 className="font-display flex items-center gap-2 text-lg font-black"><Flame className="h-5 w-5 text-amber-400" /> Termômetro da votação</h3>
+              <p className="mt-1 text-xs text-stone-400">Quem apostou o quê fica só com o organizador. Aqui vocês veem só o clima geral.</p>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="rounded-2xl border border-stone-700 bg-stone-800 p-3">
+                  <p className="font-display text-2xl font-black">{totalVotes}</p>
+                  <p className="text-[10px] font-bold tracking-wide text-stone-400">PESSOAS JÁ APOSTARAM</p>
+                </div>
+                <div className="rounded-2xl border border-stone-700 bg-stone-800 p-3">
+                  <p className="font-display text-2xl font-black">{totalVotes ? fmtDelay(avgDelay) : "—"}</p>
+                  <p className="text-[10px] font-bold tracking-wide text-stone-400">ATRASO MÉDIO PREVISTO</p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between text-xs font-black text-stone-300">
+                <span>NÍVEL DE ATRASO</span><span className="text-amber-300">{lateMeterLabel}</span>
+              </div>
+              <div className="mt-1.5 h-3 overflow-hidden rounded-full border-2 border-white/80 bg-stone-700">
+                <div className={`h-full transition-all duration-700 ${lateMeterPct > 65 ? "bg-red-500" : lateMeterPct > 40 ? "bg-amber-400" : "bg-emerald-400"}`} style={{ width: `${lateMeterPct}%` }} />
+              </div>
+              <p className="mt-3 text-xs font-semibold text-stone-400">
+                {noShowCount > 0
+                  ? `${noShowCount} de ${totalVotes} já desistiram — ${Math.round((noShowCount / totalVotes) * 100)}% apostaram no "não vem".`
+                  : "Ninguém apostou no \"não vem\" ainda. Otimismo (ou ingenuidade) coletiva(o)."}
+              </p>
+            </section>
+            )}
 
             {/* ORGANIZER PANEL */}
             <section className="rounded-3xl border-2 border-stone-900 bg-stone-900 p-5 text-white hard-shadow">

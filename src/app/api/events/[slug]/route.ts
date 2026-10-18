@@ -30,29 +30,39 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ slug: strin
     const avg = timed.length ? Math.round(timed.reduce((a, v) => a + v.slotMinutes, 0) / timed.length) : 0;
     const noShow = allVotes.filter((v) => v.slotIndex === 9).length;
 
-    // winners if revealed
+    // winners if revealed (público: aparece pra todos quando o resultado é revelado)
     let winners: typeof allVotes = [];
     if (ev.actualSlotIndex !== null && ev.actualSlotIndex !== undefined) {
       winners = allVotes.filter((v) => v.slotIndex === ev.actualSlotIndex);
     }
 
+    // Voto de quem está pedindo (identificado pelo token do apostador enviado no header).
+    const voterToken = req.headers.get("x-voter-token");
+    const mine = voterToken ? allVotes.find((v) => v.voterToken === voterToken) : undefined;
+
     return NextResponse.json({
       event: safeEvent,
       isOrganizer,
-      votes: allVotes.map((v) => ({
-        id: v.id,
-        voterName: v.voterName,
-        voterToken: v.voterToken,
-        slotIndex: v.slotIndex,
-        slotMinutes: v.slotMinutes,
-        createdAt: v.createdAt,
-        updatedAt: v.updatedAt,
-      })),
-      distribution,
       totalVotes: allVotes.length,
       avgPredictedDelay: avg,
       noShowCount: noShow,
+      myVote: mine
+        ? { id: mine.id, voterName: mine.voterName, slotIndex: mine.slotIndex, slotMinutes: mine.slotMinutes }
+        : null,
       winners: winners.map((w) => ({ id: w.id, voterName: w.voterName, slotIndex: w.slotIndex })),
+      // Lista individual + distribuição por horário: só para o organizador.
+      votes: isOrganizer
+        ? allVotes.map((v) => ({
+            id: v.id,
+            voterName: v.voterName,
+            voterToken: v.voterToken,
+            slotIndex: v.slotIndex,
+            slotMinutes: v.slotMinutes,
+            createdAt: v.createdAt,
+            updatedAt: v.updatedAt,
+          }))
+        : [],
+      distribution: isOrganizer ? distribution : [],
     });
   } catch (e) {
     console.error(e);
