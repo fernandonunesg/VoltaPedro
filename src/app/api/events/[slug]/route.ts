@@ -132,3 +132,27 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ slug: str
     return NextResponse.json({ error: "Erro ao atualizar evento" }, { status: 500 });
   }
 }
+
+// DELETE: exclui o evento (e, por cascade, os votos). Apenas o organizador.
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ slug: string }> }) {
+  try {
+    await ensureSchema();
+    const { slug } = await ctx.params;
+    const [ev] = await db.select().from(events).where(eq(events.slug, slug)).limit(1);
+    if (!ev) return NextResponse.json({ error: "Evento não encontrado" }, { status: 404 });
+
+    const clientToken = req.headers.get("x-organizer-token");
+    if (!ev.organizerToken || ev.organizerToken !== clientToken) {
+      return NextResponse.json(
+        { error: "Acesso negado. Apenas o organizador deste bolão pode excluir o evento." },
+        { status: 403 }
+      );
+    }
+
+    await db.delete(events).where(eq(events.id, ev.id));
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    return NextResponse.json({ error: "Erro ao excluir evento" }, { status: 500 });
+  }
+}

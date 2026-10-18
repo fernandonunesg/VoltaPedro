@@ -2,11 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   AlarmClock, ArrowLeft, Calendar, MapPin, Users, Copy, Check, Share2, Trophy,
   Clock, Timer, Crown, Ghost, Zap, RefreshCw, Eye, Sparkles, Hourglass,
-  BadgeCheck, Lock, PartyPopper, Flame, ChevronRight, Minus, Plus
+  BadgeCheck, Lock, PartyPopper, Flame, ChevronRight, Minus, Plus, Trash2
 } from "lucide-react";
 import { STEP_MINUTES, NO_SHOW_MINUTES, addMinutesToTime, slotByIndex, personaForMinutes, minutesToLabel, clampDelay } from "@/lib/slots";
 
@@ -96,6 +96,7 @@ function fmtDelay(min: number) { if (min >= 999) return "não vem"; if (min === 
 
 export default function EventPage() {
   const params = useParams<{ slug: string }>();
+  const router = useRouter();
   const slug = params.slug;
   const [event, setEvent] = useState<EventData | null>(null);
   const [votes, setVotes] = useState<Vote[]>([]);
@@ -126,6 +127,10 @@ export default function EventPage() {
   const [organizerToken, setOrganizerToken] = useState("");
   const [inputToken, setInputToken] = useState("");
   const [tokenError, setTokenError] = useState("");
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
 
   useEffect(() => {
     setVoterToken(getOrCreateToken());
@@ -257,6 +262,25 @@ export default function EventPage() {
       if (!res.ok) throw new Error(data.error || "Erro");
       await load(true);
     } catch (e) { alert(e instanceof Error ? e.message : "Erro"); } finally { setRevealing(false); }
+  }
+
+  async function handleDelete() {
+    if (!event || deleteConfirmName.trim() !== event.name) return;
+    setDeleting(true); setDeleteError("");
+    try {
+      const token = organizerToken || localStorage.getItem(`pedro_organizer_${slug}`) || "";
+      const res = await fetch(`/api/events/${slug}`, {
+        method: "DELETE",
+        headers: { "x-organizer-token": token },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Erro ao excluir");
+      localStorage.removeItem(`pedro_organizer_${slug}`);
+      router.push("/");
+    } catch (e) {
+      setDeleteError(e instanceof Error ? e.message : "Erro ao excluir");
+      setDeleting(false);
+    }
   }
 
   const shareLink = typeof window !== "undefined" ? `${window.location.origin}/evento/${slug}` : `/evento/${slug}`;
@@ -591,6 +615,44 @@ export default function EventPage() {
                           <button onClick={() => organizerAction("close")} disabled={revealing} className="flex-1 rounded-full border-2 border-white py-2 text-xs font-black disabled:opacity-60">Fechar votação</button>
                         ) : (
                           <button onClick={() => organizerAction("reopen")} disabled={revealing} className="flex-1 rounded-full border-2 border-white py-2 text-xs font-black disabled:opacity-60">Reabrir votação</button>
+                        )}
+                      </div>
+
+                      <div className="mt-4 border-t border-stone-700 pt-3">
+                        {!showDelete ? (
+                          <button onClick={() => { setShowDelete(true); setDeleteConfirmName(""); setDeleteError(""); }} className="inline-flex items-center gap-1.5 text-[11px] font-black text-red-300 underline underline-offset-2 transition hover:text-red-200">
+                            <Trash2 className="h-3.5 w-3.5" /> Excluir evento
+                          </button>
+                        ) : (
+                          <div className="rounded-xl border border-red-500/50 bg-red-950/40 p-3">
+                            <p className="flex items-center gap-1.5 text-xs font-black text-red-300"><Trash2 className="h-3.5 w-3.5" /> EXCLUIR ESTE EVENTO?</p>
+                            <p className="mt-1 text-[11px] leading-relaxed text-stone-300">
+                              Isso apaga o evento e as {totalVotes} aposta{totalVotes === 1 ? "" : "s"} de vez. Não tem volta. Digite <strong className="text-white">{event.name}</strong> para confirmar.
+                            </p>
+                            <input
+                              value={deleteConfirmName}
+                              onChange={(e) => setDeleteConfirmName(e.target.value)}
+                              placeholder="Nome do evento"
+                              className="mt-2 w-full rounded-xl border border-stone-600 bg-stone-900 px-3 py-2 text-xs text-white outline-none focus:border-red-400"
+                            />
+                            {deleteError && <p className="mt-1.5 text-[11px] font-bold text-red-400">{deleteError}</p>}
+                            <div className="mt-2 flex gap-2">
+                              <button
+                                onClick={handleDelete}
+                                disabled={deleting || deleteConfirmName.trim() !== event.name}
+                                className="flex-1 rounded-full bg-red-500 py-2 text-xs font-black text-white disabled:opacity-50"
+                              >
+                                {deleting ? "EXCLUINDO…" : "EXCLUIR DEFINITIVAMENTE"}
+                              </button>
+                              <button
+                                onClick={() => setShowDelete(false)}
+                                disabled={deleting}
+                                className="rounded-full border-2 border-stone-600 px-3 py-2 text-xs font-black text-stone-200 disabled:opacity-50"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
                         )}
                       </div>
                     </>
